@@ -22,6 +22,9 @@ that you only ever do step 4.
   * A USB 3 cable, in a USB 3 port (blue, or marked SS)
   * Windows 10 or 11, and admin rights (it asks via UAC)
   * A Meta account you can sign into on a computer and a phone
+  * Internet on the headset - keep its Wi-Fi on. Steam Link has
+    to reach Steam's servers before it connects to your PC, so
+    offline it hangs at "connecting" and SteamVR never opens.
 
 Nothing needs to be installed. Do not move these files apart -
 they have to stay in the same folder.
@@ -121,8 +124,8 @@ wording differs slightly, look for anything named Developer.
 Leave the window open while you play. When you are done, press
 any key in it - that puts everything back to normal.
 
-There are two ways this can end up working, and the script picks
-whichever your PC supports. Either is fine:
+There are a few ways this can end up working, and the script
+picks whichever your PC and headset support:
 
   "NAT is up"
       The headset gets internet through the cable. Leave its
@@ -132,10 +135,14 @@ whichever your PC supports. Either is fine:
   "Windows NAT is not available on this PC"
       Sharing your internet needs a Windows part that only comes
       with Hyper-V, so Windows Home usually does not have it.
-      The script handles this by switching the headset's Wi-Fi
-      off for you, which makes the cable its only route. Steam
-      Link does not need the headset to have internet. Wi-Fi is
-      switched back on when you exit.
+      The cable link still comes up, and the headset keeps using
+      its Wi-Fi for internet. Keep Wi-Fi on - Steam Link needs it.
+
+  "Headset already has a fixed address"
+      See below under IF IT DOES NOT WORK. Keep Wi-Fi on here too.
+
+If the script ends with "The headset has no internet", turn the
+headset's Wi-Fi on before opening Steam Link.
 
 
 ---------------------------------------------------------------
@@ -209,11 +216,17 @@ rebooting the headset clears it - the change is never permanent.
     network and skips DHCP. Connect Steam Link to the PC address
     the script prints.
 
+Steam Link sits at "connecting" and SteamVR never opens
+    The headset has no internet. Steam Link has to reach Steam's
+    servers before it talks to your PC. Turn the headset's Wi-Fi
+    on. Do not turn Wi-Fi off to force traffic onto the cable -
+    that is exactly what causes this.
+
 It says Link is up, but Steam Link still uses Wi-Fi
     If the script said "NAT is up", give it 15 seconds to check
     the cable for internet, then it switches over on its own.
-    Otherwise the script turns the headset's Wi-Fi off for you;
-    if that did not happen, turn it off by hand.
+    Otherwise it is SteamVR's choice which link carries the video
+    while Wi-Fi is on. Reports of what it picks are welcome.
 
 Steam does not see the PC at all
     Firewall. The script adds a rule, but third-party security
@@ -230,11 +243,10 @@ You use a VPN app on the headset
 
   NCM-Run.bat -WifiOff
 
-Skips the internet sharing and just switches the headset's Wi-Fi
-off, so the cable is its only route. Wi-Fi is switched back on
-when you exit. The script does this by itself when your PC
-cannot share internet, so you only need this switch if you want
-to force it - for example if the NAT clashes with something else
-on your PC.
+Skips the internet sharing and switches the headset's Wi-Fi off,
+so the cable is its only route. Wi-Fi is switched back on when
+you exit. This leaves the headset offline, so current Steam Link
+versions will not start a session with it. The script never does
+this unless you ask.
 
 (-NoInternet is accepted as an older name for the same switch.)

@@ -58,7 +58,20 @@ real `ETHERNET` network and routes over the cable.
 
 The NAT matters more than it looks: Android only prefers the cable over Wi-Fi
 once that network **validates**, which requires real internet behind it.
-Without NAT the link is up but unused, and you'd have to turn Wi-Fi off.
+Without NAT the link is up, but Wi-Fi stays the default network — and Wi-Fi has
+to stay on, see below.
+
+### The headset needs internet
+
+Steam Link asks Steam's servers for a connection
+(`ISteamDirectory/GetCMListForConnect`) **before** it contacts the PC. With no
+internet on the headset that request fails with *Couldn't resolve host name*
+every ~12 s, the PC never hears from it, and SteamVR never opens — Steam Link
+just sits at "connecting". That holds on Windows 10 and 11 alike.
+
+So the headset needs internet: through the cable with NAT, or over its own
+Wi-Fi. The script no longer switches Wi-Fi off on its own, and warns at the end
+if the headset is offline.
 
 ### Headsets with a fixed address
 
@@ -127,6 +140,9 @@ Steam Link still cannot find the PC, turn any VPN off before looking further.
   developer account**, which is free but not instant. See below.
 - USB 3 cable in a USB 3 port
 - Windows 10 or 11, administrator (UAC prompt)
+- Internet on the headset — Wi-Fi on, or Windows NAT sharing the PC's
+  connection. Steam Link won't start a session offline; see
+  [The headset needs internet](#the-headset-needs-internet).
 - Android platform-tools — included in the release zip, see
   [Getting adb.exe](#getting-adbexe) if you cloned the repo
 
@@ -156,20 +172,19 @@ Leave the window open while playing; press any key in it to restore everything.
 
 ### Three working modes
 
-When the headset asks for an address over DHCP, Android only prefers the cable
-over Wi-Fi once that network passes its internet check. There are two ways to
-get there. A headset with a fixed address needs neither. The script picks
-automatically:
+The script picks automatically:
 
 | Script says | What happens | Requires |
 |---|---|---|
 | `NAT is up` | Headset gets internet through the cable and switches to it on its own after ~15 s. Leave Wi-Fi on. | Windows NAT (`MSFT_NetNat`) |
-| `Windows NAT is not available` | Script switches the headset's Wi-Fi off, making the cable its only route. Restored on exit. | nothing |
-| `Headset already has a fixed address` | PC joins the headset's own subnet; no DHCP, no NAT, Wi-Fi untouched. Connect Steam Link to the PC address the script prints. | a [newer headset build](#headsets-with-a-fixed-address) |
+| `Windows NAT is not available` | Cable link is up, but the headset keeps Wi-Fi as its default network for internet. | headset Wi-Fi on |
+| `Headset already has a fixed address` | PC joins the headset's own subnet; no DHCP, no NAT, Wi-Fi untouched. Connect Steam Link to the PC address the script prints. | a [newer headset build](#headsets-with-a-fixed-address), headset Wi-Fi on |
 
 `MSFT_NetNat` ships with Hyper-V, so **Windows Home generally does not have it**
-and will use the second mode. All of them work — Steam Link doesn't need the
-headset to have internet, since the PC is doing the streaming.
+and will use the second mode. In the second and third modes the headset's
+internet comes from its Wi-Fi, so keep Wi-Fi on. Whether the video then goes
+over the cable is SteamVR's choice: in one test it opened a link on both and
+picked Wi-Fi as the primary one — see [Testing wanted](#testing-wanted).
 
 The full walkthrough, with troubleshooting, is in **[README.txt](README.txt)**.
 
@@ -181,10 +196,11 @@ The full walkthrough, with troubleshooting, is in **[README.txt](README.txt)**.
 NCM-Run.bat -WifiOff
 ```
 
-Forces Wi-Fi-off mode instead of trying to share internet. The script already
-falls back to this on its own when NAT is unavailable, so you only need the
-switch to force it — for example if the NAT clashes with something else on the
-PC. `-NoInternet` is accepted as an older name for the same switch.
+Switches the headset's Wi-Fi off instead of sharing internet, so the cable is
+its only route; Wi-Fi comes back on exit. This leaves the headset **offline**,
+so current Steam Link versions won't start a session with it — it is kept only
+for testing and older setups, and is never used unless you ask for it.
+`-NoInternet` is accepted as an older name for the same switch.
 
 ## What it changes on your PC
 
@@ -198,7 +214,7 @@ Windows 10 driver binding is reverted on exit.
 | DHCP server on UDP 67 — DHCP modes only | process stopped |
 | NAT for `192.168.42.0/24` — NAT mode only | `Remove-NetNat` |
 | Inbound firewall rules — the link's subnet, and UDP 67 for DHCP (DHCP modes only) | `Remove-NetFirewallRule` |
-| Headset Wi-Fi off — Wi-Fi-off mode only | `svc wifi enable` |
+| Headset Wi-Fi off — only with `-WifiOff` | `svc wifi enable` |
 | Windows 10 only: the inbox *UsbNcm Host Device* driver bound to the headset's NCM interface | **kept** — it is Windows' own driver and is what makes later runs work. Remove it in Device Manager (*Uninstall device*, tick *Delete the driver*) if you want it gone. |
 
 The USB mode change is never persisted — `persist.sys.usb.config` needs root to
@@ -231,7 +247,9 @@ Most useful reports:
   confirmed at 3.8 Gbps on Windows 10; streaming not yet tried.)
 - Windows 10 — confirm the automatic driver binding on more PCs
 - Older Quest builds — where does NCM support start?
-- Windows Home — confirm the Wi-Fi-off fallback kicks in and Steam Link works
+- With headset Wi-Fi on, does the video actually go over the cable? SteamVR's
+  `vrserver.txt` logs `SVLDataLinkUber: Found primary link <PC address>` —
+  the cable is the PC's NCM address (`192.168.42.1` or `10.86.13.33`)
 - PCs with existing ICS or Hyper-V setups — does the NAT clash with anything?
 - Whether `setScreenUnlockedFunctions ncm` survives a reboot
 

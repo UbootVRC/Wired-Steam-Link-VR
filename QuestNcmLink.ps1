@@ -33,8 +33,11 @@
 
       * The Ethernet network must become the DEFAULT network or apps will keep
         using Wi-Fi. Android only prefers it once it VALIDATES, which needs
-        real internet - hence the NAT below. Without NAT you would have to turn
-        the headset's Wi-Fi off instead.
+        real internet - hence the NAT below. Without NAT, Wi-Fi stays the
+        default, and that is left alone on purpose: turning Wi-Fi off leaves
+        the headset offline, and Steam Link asks Steam's servers for a
+        connection (GetCMListForConnect) before it ever contacts the PC, so an
+        offline headset never starts a session and SteamVR never opens.
 
       * Any active VpnService on the headset captures uid 0-99999 and swallows
         all app traffic regardless of routing, so the cable goes unused while
@@ -48,7 +51,8 @@ param(
     # Wi-Fi-off mode: rather than giving the headset internet through the cable
     # (which needs Windows NAT), switch the headset's Wi-Fi off so the cable is
     # its only route. Wi-Fi is switched back on when this script exits.
-    # This is also the automatic fallback when Windows NAT is unavailable.
+    # Opt-in only: it leaves the headset offline, and current Steam Link
+    # versions will not start a session without internet.
     # -NoInternet is accepted as an older name for the same switch.
     [Alias('NoInternet')]
     [switch]$WifiOff
@@ -216,6 +220,23 @@ function Get-PeerAddress([string]$Ip, [int]$Prefix) {
     if ($peer -eq $n) { $peer++ }
     $toIp = { param($v) $o = [BitConverter]::GetBytes([uint32]$v); [Array]::Reverse($o); ([Net.IPAddress]$o).ToString() }
     [pscustomobject]@{ Pc = (& $toIp $peer); Cidr = "$(& $toIp $net)/$Prefix" }
+}
+
+# True once the headset's default network is VALIDATED, i.e. it has internet.
+function Test-HeadsetOnline([int]$TimeoutSec) {
+    $deadline = (Get-Date).AddSeconds($TimeoutSec)
+    do {
+        $conn = & $script:Adb -s $script:Serial shell "dumpsys connectivity" 2>&1
+        $m = $conn | Select-String '^Active default network: (\d+)' | Select-Object -First 1
+        if ($m) {
+            $id = $m.Matches[0].Groups[1].Value
+            if ($conn | Select-String "NetworkAgentInfo\{network\{$id\}.*Capabilities: [^\]]*\bVALIDATED\b" -Quiet) {
+                return $true
+            }
+        }
+        Start-Sleep -Seconds 2
+    } while ((Get-Date) -lt $deadline)
+    return $false
 }
 
 function Bind-UsbNcmDriver([string]$InstanceId) {
@@ -591,14 +612,13 @@ try {
         }
     }
 
-    # Without NAT the cable cannot pass Android's internet check, so Wi-Fi
-    # stays the default network and the cable goes unused. Switching Wi-Fi off
-    # makes the cable the only route. Put back in Restore-Everything.
-    # Not for a fixed-address headset: that network has no gateway, so it
-    # never becomes the default either way. Steam Link uses it directly.
-    if ($leased -and -not $script:NatMade -and -not $StaticHeadset) {
-        Say "      No internet on the cable, so switching the headset's"
-        Say "      Wi-Fi off to force traffic onto it."
+    # Only on request (-WifiOff): it makes the cable the headset's only route,
+    # but also leaves it offline, which stops Steam Link starting a session.
+    # Put back in Restore-Everything. Not for a fixed-address headset: that
+    # network has no gateway, so it never becomes the default either way.
+    if ($leased -and $WifiOff -and -not $StaticHeadset) {
+        Say "      -WifiOff: switching the headset's Wi-Fi off so the cable"
+        Say "      is its only route."
         & $script:Adb -s $script:Serial shell svc wifi disable 2>&1 | Out-Null
         $script:WifiOffByUs = $true
         Start-Sleep -Seconds 5
@@ -627,10 +647,27 @@ try {
         } elseif ($script:NatMade) {
             Say  "  Give it ~15s to validate, then it becomes the default"
             Say  "  network on its own. You can leave Wi-Fi on."
-        } else {
+        } elseif ($script:WifiOffByUs) {
             Ok   "  Headset Wi-Fi is off, so the cable is its only route."
-            Say  "  Steam Link does not need the headset to have internet."
             Say  "  Wi-Fi comes back when you press a key to exit."
+        } else {
+            Say  "  No internet on the cable (no Windows NAT), so the headset"
+            Say  "  keeps Wi-Fi as its default network. Steam Link needs that"
+            Say  "  to start a session."
+        }
+
+        # Steam Link contacts Steam's servers before the PC; offline, it sits
+        # at "connecting" and SteamVR never opens. NAT needs ~15s to validate.
+        if (-not (Test-HeadsetOnline $(if ($script:NatMade) { 25 } else { 6 }))) {
+            Write-Host ""
+            Warn "  The headset has no internet. Steam Link has to reach Steam's"
+            Warn "  servers before it connects to this PC, so it will hang at"
+            Warn "  'connecting' and SteamVR will not open."
+            if ($script:WifiOffByUs) {
+                Warn "  Run this again without -WifiOff."
+            } else {
+                Warn "  Turn the headset's Wi-Fi on."
+            }
         }
         Write-Host ""
         Say "  In Steam Link, connect to $PcIp"

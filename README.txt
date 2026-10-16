@@ -188,11 +188,26 @@ rebooting the headset clears it - the change is never permanent.
     refused. Also look in Device Manager, under Network
     adapters, for anything with a yellow warning icon.
 
+    On Windows 10 the NCM device shows up under Other devices
+    with Code 28, because Windows 10 does not match its built-in
+    UsbNcm driver to it. The script installs that driver for you;
+    if that fails, do it by hand while step 2 is running:
+    Update driver > Browse my computer > Let me pick > Network
+    adapters > Microsoft > UsbNcm Host Device. Windows remembers
+    it, so this is only needed once.
+
 "The headset never took a lease"
     Something else on the PC is probably using UDP port 67 -
     another DHCP server, or Internet Connection Sharing.
     In PowerShell:
         Get-NetUDPEndpoint -LocalPort 67
+
+"Headset already has a fixed address"
+    Not an error. Newer headset builds give the cable a fixed
+    address themselves (for Steam Link's own wired mode) instead
+    of asking for one, so the script puts the PC in that same
+    network and skips DHCP. Connect Steam Link to the PC address
+    the script prints.
 
 It says Link is up, but Steam Link still uses Wi-Fi
     If the script said "NAT is up", give it 15 seconds to check
